@@ -52,7 +52,8 @@ class HTTPTests(unittest.TestCase):
 
     def test_static_and_config(self):
         for path, marker in [
-            ("/", b"Small world."), ("/app.js", b"/api/train"),
+            ("/", b"Small world."), ("/app.js", b"./engine.js"),
+            ("/engine.js", b"export class BrowserEngine"),
             ("/style.css", b":root"), ("/api/config", b'"size": 6'),
         ]:
             status, headers, body = self.request("GET", path)

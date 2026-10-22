@@ -4,20 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GridWorld · Reinforcement Learning Lab</title>
-  <link rel="stylesheet" href="/style.css">
-  <script src="/app.js" defer></script>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
 </head>
 <body>
   <header class="shell">
     <p class="eyebrow">INTERACTIVE MACHINE LEARNING / 01</p>
     <h1>Small world.<br><span>Real learning.</span></h1>
     <p class="intro">Teach an agent to find a goal, avoid hazards, and make better decisions.
-      Every move and training metric comes from a real Python environment.</p>
-    <div class="badges"><span>Python standard library</span><span>Tabular Q-learning</span><span>Offline · no API keys</span></div>
+      Every move and training metric comes from a real browser-run environment.</p>
+    <div class="badges"><span>Browser JavaScript</span><span>Tabular Q-learning</span><span>Offline · no API keys</span></div>
   </header>
   <main class="shell">
     <p id="status" role="status" aria-live="polite">Connecting to the local environment…</p>
-    <noscript>This interactive demo requires JavaScript and the local Python server.</noscript>
+    <noscript>This interactive demo requires JavaScript (no backend server required).</noscript>
     <div class="layout">
       <section class="panel arena" aria-labelledby="arena-title">
         <div class="section-heading"><h2 id="arena-title">01 / Play the environment</h2><span id="mode-label">HUMAN CONTROL</span></div>
@@ -54,7 +54,7 @@
           <button id="train" class="primary" type="submit">Train a real agent</button>
         </form>
         <p class="muted">α = 0.20 · γ = 0.95 · ε decays from ≈0.50 to ≈0.033.
-          Training runs on the backend, not in the animation.</p>
+          Training runs in short browser chunks, not in the animation. Browser seeds use Mulberry32; Python RNG results differ.</p>
         <div class="metric-grid">
           <div><small>GREEDY SUCCESS</small><strong id="success">—</strong></div>
           <div><small>RANDOM BASELINE</small><strong id="baseline">—</strong></div>
@@ -99,7 +99,7 @@
     </section>
     <section class="panel honesty">
       <h2>What this demo does—and doesn't do</h2>
-      <p><strong>Implemented:</strong> a playable GridWorld, Python HTTP API, seeded tabular
+      <p><strong>Implemented:</strong> a playable browser GridWorld, optional local Python HTTP API, seeded tabular
         Q-learning, real training windows, frozen-policy evaluation versus a random baseline,
         and downloadable run data.</p>
       <p><strong>Not implemented:</strong> Unity, ML-Agents, PyTorch, PPO, DQN, neural networks,
