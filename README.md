@@ -1,6 +1,9 @@
-# GridWorld — a real, local reinforcement-learning lab
+# GridWorld - a real reinforcement-learning lab
 
-A playable browser game backed by **actual tabular Q-learning in Python**.
+**[Live demo: sneakzttv.github.io/rl-game-agent](https://sneakzttv.github.io/rl-game-agent/)**
+
+A playable browser game with **actual seeded tabular Q-learning in JavaScript**,
+plus an independent Python standard-library implementation and local API.
 Train from scratch, inspect action values, watch the learned policy, compare it
 with a random baseline, and export observed training data. No API keys, packages,
 assets, network services, or pretrained models are required.
@@ -10,7 +13,40 @@ assets, network services, or pretrained models are required.
 > DQN, or TensorBoard. Those original resume technologies are not demonstrated
 > by this repository.
 
-## Run locally
+## Browser mode and GitHub Pages
+
+The live demo is entirely static: `static/engine.js` computes transitions,
+Q updates, frozen-policy evaluation, and the matched random baseline on-device.
+`app.js` renders policy arrows, observed training windows, exports, and all eight
+interactive tutorial chapters. No backend, CDN, third-party service, secrets,
+or API keys are needed. Assets use relative paths for the `/rl-game-agent/` subpath.
+Each tab starts untrained and owns an independent in-memory model.
+
+To preview exactly the Pages files locally (Python 3.10+):
+
+```powershell
+python -m http.server 8000 --bind 127.0.0.1 --directory static
+```
+
+Open **http://127.0.0.1:8000**. Use an HTTP server rather than opening the HTML
+as `file://`, because browsers restrict local ES module loading. Training yields
+with `setTimeout` every 50 episodes, keeping the UI responsive; progress appears
+in the status message. The chart is populated when training completes.
+
+### Deployment
+
+`.github/workflows/pages.yml` runs on pushes to `main` and manual dispatch.
+It runs dependency-free Node tests and syntax checks, uploads only `static/`
+with `actions/upload-pages-artifact@v3`, then deploys using
+`actions/deploy-pages@v4`. The workflow uses `contents: read`, `pages: write`,
+`id-token: write`, a `pages` concurrency group, and the `github-pages` environment.
+A repository maintainer must select **GitHub Actions** as the Pages publishing
+source in repository Settings > Pages if not already configured. Deployment
+requires a successful workflow and repository Pages availability; the demo link
+is the intended URL, not proof that a deployment has already occurred.
+No GitHub settings are changed by this implementation.
+
+## Run the optional local Python server
 
 Requirements: Python **3.10+** and a modern browser (Chrome, Edge, Firefox, Safari).
 All Python imports are from the standard library. No `pip install` is needed.
@@ -23,9 +59,9 @@ python server.py
 Open **http://127.0.0.1:8000**. Keep the terminal running; press **Ctrl+C** to stop.
 If `python` is not available on Windows, use `py -3 server.py`.
 If the port is occupied, run `python server.py --port 8001` and open the printed URL.
-Run the server rather than opening `static\index.html` directly: the game needs
-the Python API. The listener is deliberately fixed to `127.0.0.1`, not public
-interfaces. Do not reverse-proxy or publicly deploy this development server.
+The frontend still uses the JavaScript engine in this mode; the Python API
+is separately available for experiments and tests, not called by the UI. The
+listener is deliberately fixed to `127.0.0.1`, not public interfaces. Do not reverse-proxy or publicly deploy this development server.
 
 ### Five-minute, fully offline demonstration
 
@@ -34,8 +70,8 @@ interfaces. Do not reverse-proxy or publicly deploy this development server.
 2. Open **Learn how it works**. All eight chapters have Back/Next controls,
    direct chapter buttons, worked examples, and a **Try this state example**
    button that places the game at an illustrative state.
-3. Train **3000 episodes**, **seed 42**. This computes real updates on the
-   backend and replaces the previous in-memory model.
+3. Train **3000 episodes**, **seed 42**. This computes real updates in the
+   browser and replaces this tab's previous in-memory model.
 4. Compare frozen greedy success against random success. Training success is
    charted separately, with an accessible data table.
 5. Select **Agent: one step**, inspect the Q values, or **Watch agent**.
@@ -76,7 +112,20 @@ Q(state, action) += alpha * (target - Q(state, action))
 `epsilon = 0.03 + 0.47 * exp(-episode / max(episodes/5, 1))`.
 Epsilon is the probability of a random training action. Greedy ties always use
 the first action in up/right/down/left order. Tables begin at zero; each Train
-click starts over. Python's seeded PRNG makes same-seed runs reproducible.
+click starts over. The browser uses seeded **Mulberry32**; Python uses `random.Random`.
+The map, rewards, hyperparameters, epsilon schedule, update rules, and stable
+argmax ties match, but random streams and therefore numerical results **differ
+between JavaScript and Python**. Seeds reproduce runs within the same engine,
+not across engines. JSON exports label the browser engine and hyperparameters.
+
+### Measured browser sample
+
+With 3000 training episodes, seed 42, and 200 evaluation episodes at seed 9001,
+the browser engine achieved **200/200 goals (100%)** versus **29/200 (14.5%)**
+for random actions. Mean return was **0.9137** versus **-1.1224**; mean steps
+were **5.315** versus **13.435**. Re-evaluation at seed 12345 gave **100%** versus
+**21%** random success. These are measured JavaScript engine results on this
+fixed map, not Python results or a claim of generalization.
 
 ### Metrics mean what they say
 
@@ -103,7 +152,16 @@ From this directory:
 
 ```powershell
 python -m unittest discover -s tests -v
+node --test
+node --check static\engine.js
+node --check static\app.js
+git diff --check
 ```
+
+JavaScript tests require Node **22+** with no npm dependencies. They cover
+transitions, validation, known seeded RNG output, repeatability, partial windows,
+event-loop yielding, policy/export data, independent models, and learning on
+seeds 7, 42, and 123 using the same acceptance thresholds described below.
 
 Tests start an actual ephemeral loopback HTTP server and clean it up. They cover
 rewards, boundaries, reachability, request validation, same-origin/Host guards,
@@ -118,15 +176,17 @@ The BFS helper is used only as a reachability test oracle, never by the agent.
 GitHub Actions runs the suite on Python 3.10, 3.12, and 3.13 when this directory
 is the repository root.
 
-## Layout and API
+## Layout and optional Python API
 
 ```text
 gridworld.py           deterministic environment, learning, evaluation
 server.py              loopback HTTP server and bounded JSON endpoints
 static/index.html      semantic, keyboard-usable interface
-static/app.js          API client, playback, charts, tutorials, downloads
+static/engine.js       seeded browser environment, learning, evaluation
+static/app.js          browser engine UI, playback, charts, tutorials, downloads
 static/style.css       responsive presentation and visible focus states
-tests/                 stdlib unittest environment and HTTP tests
+tests/                 Python unittest and Node node:test suites
+package.json           ES module mode and dependency-free npm test command
 .github/workflows/     CI configuration
 ```
 
@@ -159,13 +219,14 @@ A future Unity port would need an actual tested Unity project, observations,
 actions, rewards, training configuration, and reproducible evaluation. It is not
 present, so no untested “integration” instructions are supplied.
 
-The model lives in server memory and is lost at restart. JSON exports document
-results but cannot be imported to restore training. One shared model serves all
-tabs; a model-version check prevents one tab silently playing another tab's
-policy. Game state is client-supplied for transparent educational replay, not
+Browser models live only in tab memory and are lost on reload. The separate
+Python API model lives in server memory and is lost at restart; its clients
+share one model with version checks. Browser and Python API models are never
+synchronized. JSON exports document results but cannot be imported to restore
+training. Game state is client-supplied for transparent educational replay, not
 an authoritative competitive scoreboard. The local development HTTP server
 is not production-hardened or multi-user infrastructure. The chart summarizes
-training after the request finishes; it is not live streaming.
+training after computation finishes; it is not live streaming.
 
 ## License
 

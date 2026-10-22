@@ -18,3 +18,15 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Test environment, real learning, and HTTP integration
         run: python -m unittest discover -s tests -v
+  browser-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test browser engine and check JavaScript syntax
+        run: |
+          node --test
+          node --check static/engine.js
+          node --check static/app.js

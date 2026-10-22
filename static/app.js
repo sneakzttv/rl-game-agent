@@ -1,6 +1,7 @@
-"use strict";
+import { BrowserEngine, config as environmentConfig } from "./engine.js";
 
-// The browser renders state, but Python owns transitions, rewards, and learning.
+// Learning and transitions stay on-device; no backend API is needed.
+const engine = new BrowserEngine();
 const $ = (id) => document.getElementById(id);
 const arrows = ["↑", "→", "↓", "←"];
 let config = null;
@@ -15,17 +16,6 @@ function status(message, error = false) {
   // Use textContent for all variable values: no server strings become HTML.
   $("status").textContent = message;
   $("status").classList.toggle("error", error);
-}
-
-async function api(path, body) {
-  const response = await fetch(path, body === undefined ? {} : {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-  return data;
 }
 
 function updateControls() {
@@ -107,9 +97,8 @@ async function move(action, mode = "human") {
   busy = true;
   updateControls();
   try {
-    const result = await api("/api/step", {
+    const result = engine.step({
       state: game.state, steps: game.steps, mode, action,
-      model_version: mode === "agent" && run ? run.model_version : undefined,
     });
     game.state = result.state;
     game.steps = result.steps;
@@ -137,7 +126,7 @@ async function move(action, mode = "human") {
 async function playback() {
   if (!playing) return;
   await move(undefined, "agent");
-  // Schedule after the response, never pile up overlapping network requests.
+  // Schedule after each move; never pile up overlapping playback steps.
   if (playing) timer = setTimeout(playback, 300);
 }
 
@@ -177,10 +166,11 @@ $("train-form").addEventListener("submit", async (event) => {
   if (busy || playing) return;
   busy = true;
   updateControls();
-  status("Training from scratch on the local Python backend…");
+  status("Training from scratch in your browser...");
   try {
-    const result = await api("/api/train", {
+    const result = await engine.train({
       episodes: Number($("episodes").value), seed: Number($("seed").value),
+      onProgress: (done, total) => status(`Training in browser: ${done} / ${total} episodes...`),
     });
     run = result;
     showHistory();
@@ -189,7 +179,7 @@ $("train-form").addEventListener("submit", async (event) => {
     status(`Completed ${run.episodes} real training episodes (seed ${run.seed}). ` +
       "The board arrows now show the learned greedy policy.");
   } catch (error) {
-    status(`Training failed: ${error.message}. Is the Python server running?`, true);
+    status(`Training failed: ${error.message}`, true);
   } finally {
     busy = false;
     updateControls();
@@ -201,11 +191,7 @@ $("evaluate").addEventListener("click", async () => {
   busy = true;
   updateControls();
   try {
-    const result = await api("/api/evaluate", { episodes: 200, seed: 12345 });
-    // Multiple browser tabs share one model; do not mislabel another tab's run.
-    if (result.model_version !== run.model_version) {
-      throw new Error("Another tab replaced the shared model. Train again in this tab.");
-    }
+    const result = engine.evaluate({ episodes: 200, seed: 12345 });
     run.evaluation = result.evaluation;
     run.baseline = result.baseline;
     showEvaluation(run);
@@ -263,10 +249,10 @@ $("autoplay").addEventListener("click", () => {
 const lessons = [
   {
     title: "The loop: observe → act → learn",
-    body: "The environment is a 6×6 board. Python returns the next state and reward; " +
-      "the browser only displays them. Training runs thousands of episodes without animation. " +
-      "Playback asks the backend for one learned action at a time.",
-    example: "Browser POST /api/step → Python transition(state, action) → JSON → board",
+    body: "The environment is a 6 by 6 board. JavaScript computes the next state and reward " +
+      "inside your browser. Training runs in short chunks without animation. " +
+      "Playback chooses one learned action at a time, without a server.",
+    example: "Browser action -> transition(state, action) -> reward + next state -> board",
     state: [0, 0],
   },
   {
@@ -311,7 +297,7 @@ const lessons = [
     body: "During training, epsilon is the probability of choosing a random action. " +
       "It decays from about 0.50 toward 0.033. Otherwise, the agent chooses the highest Q. " +
       "Episodes begin at random safe cells so the whole map is explored. A seed makes " +
-      "the same run reproducible. Each Train click starts over, not fine-tunes.",
+      "the same browser run reproducible (Mulberry32, not the Python RNG). Each Train click starts over, not fine-tunes.",
     example: "if random() < epsilon: choose random action\nelse: choose argmax Q(state, action)\n" +
       "Ties are resolved consistently: up, right, down, left.",
     state: [2, 2],
@@ -331,8 +317,9 @@ const lessons = [
     title: "Controls, components, and honest scope",
     body: "Use arrows or move buttons to play; Reset returns to [0,0]. Train enables " +
       "Agent: one step and Watch agent. Pause stops automatic playback. The JSON export " +
-      "contains the policy and metrics; CSV contains training windows. gridworld.py implements " +
-      "learning, server.py exposes a bounded local API, app.js renders this interface. " +
+      "contains the policy and metrics; CSV contains training windows. engine.js implements " +
+      "browser learning, app.js renders this interface. The optional server.py serves these " +
+      "files and exposes a separate Python API using gridworld.py. " +
       "This is tabular learning on a known map—not Unity, PPO, DQN, PyTorch, or TensorBoard.",
     example: "1. Train 3000 episodes, seed 42\n2. Compare greedy success with random baseline\n" +
       "3. Watch agent, then play yourself\n4. Re-evaluate with another seed and export real data",
@@ -370,9 +357,6 @@ $("lesson-example-button").addEventListener("click", () => {
 });
 renderLesson();
 updateControls();
-api("/api/config").then((data) => {
-  config = data;
-  resetGame();
-  status("Environment ready. Play manually, explore the tutorial, or train an agent.");
-}).catch((error) => status(
-  `Cannot connect: ${error.message}. Run python server.py and open its printed loopback URL.`, true));
+config = environmentConfig;
+resetGame();
+status("Browser environment ready. Play manually, explore the tutorial, or train an agent.");
